@@ -23,7 +23,7 @@ public class AudioManager : MonoBehaviour
 
     void Start()
     {
-        Play(0, "bgmBoss", true); // 確保開場播放音樂
+        //Play(0, "bgmBoss", true); // 確保開場播放音樂
     }
 
     public void Play(int index, string name, bool isLoop)
