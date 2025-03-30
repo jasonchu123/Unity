@@ -4,14 +4,13 @@ using UnityEngine;
 
 public class EnemyBehavior : MonoBehaviour
 {
-    private Animator animator;
+     private Animator animator;
     private float attackTimer;
     private bool isAttacking = false;
     public float attackInterval = 2f;
     
     public float chaseRange = 10f;
     public float moveSpeed = 2f;
-    public float patrolSpeed = 2f;
     
     [SerializeField] private float leftCap;
     [SerializeField] private float rightCap;
@@ -19,28 +18,20 @@ public class EnemyBehavior : MonoBehaviour
     public float detectRange = 3f;
     
     private Transform player;
-    public GameObject hitbox;
+    public GameObject hitboxPrefab;  // 🔹 Boss 攻擊時產生的 hitbox
+    private GameObject currentHitbox; // 🔹 用來存放當前 hitbox 的物件
     
-    public float health = 100f;
+    public float health = 300f;
     private bool isDead = false;
     public healthbar healthBar;
     private bool facingRight = true;
     private bool isChasing = false;
-
-    public void DisableHitbox()
-{
-    if (hitbox != null)
-    {
-        hitbox.SetActive(false); // 禁用 hitbox
-    }
-}
 
     void Start()
     {
         animator = GetComponent<Animator>();
         attackTimer = attackInterval;
         player = GameObject.FindGameObjectWithTag("Player")?.transform;
-        if (hitbox != null) hitbox.SetActive(false);
         patrolTarget = new Vector3(rightCap, transform.position.y, transform.position.z);
     }
 
@@ -83,12 +74,13 @@ public class EnemyBehavior : MonoBehaviour
     private void Patrol()
     {
         if (isChasing) return;
-        transform.position = Vector2.MoveTowards(transform.position, patrolTarget, patrolSpeed * Time.deltaTime);
+        transform.position = Vector2.MoveTowards(transform.position, patrolTarget, moveSpeed * Time.deltaTime);
         SetState(4);
         if (Vector2.Distance(transform.position, patrolTarget) < 0.1f)
         {
-            patrolTarget = (patrolTarget.x == leftCap) ? new Vector3(rightCap, transform.position.y, transform.position.z) : 
-                                                        new Vector3(leftCap, transform.position.y, transform.position.z);
+            patrolTarget = (patrolTarget.x == leftCap) ? 
+            new Vector3(rightCap, transform.position.y, transform.position.z) : 
+            new Vector3(leftCap, transform.position.y, transform.position.z);
             Flip();
         }
     }
@@ -108,17 +100,32 @@ public class EnemyBehavior : MonoBehaviour
     {
         if (isDead) return;
         isAttacking = true;
-        SetState(1);
+        SetState(1); // 播放攻擊動畫
         GameManager.instance.audioManager.Play(1, "SeShoot", false);
-        if (hitbox != null) hitbox.SetActive(true);
-        Invoke("ResetAttack", 0.1f);
     }
 
-    void ResetAttack()
+    /// <summary>
+    /// 🔹 透過動畫事件啟動 hitbox
+    /// </summary>
+    public void EnableHitbox()
     {
-        isAttacking = false;
-        SetState(0);
-        if (hitbox != null) hitbox.SetActive(false);
+        if (hitboxPrefab != null)
+        {
+            currentHitbox = Instantiate(hitboxPrefab, transform.position, Quaternion.identity);
+            currentHitbox.transform.SetParent(transform); // 讓 hitbox 跟隨 Boss
+        }
+    }
+
+    /// <summary>
+    /// 🔹 透過動畫事件關閉 hitbox
+    /// </summary>
+    public void DisableHitbox()
+    {
+        if (currentHitbox != null)
+        {
+            Destroy(currentHitbox); // 刪除 hitbox
+            currentHitbox = null;
+        }
     }
 
     public void TakeDamage(int damage)
