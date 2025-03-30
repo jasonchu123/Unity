@@ -9,14 +9,14 @@ public class AudioManager : MonoBehaviour
     public AudioClip SeDamage;
     public AudioClip SeDestroy;
 
-    private List<AudioSource> audios = new List<AudioSource>();
+    public List<AudioSource> audios = new List<AudioSource>();
 
     private void Awake()
     {
         for (int i = 0; i < 3; i++)
         {
             var audio = gameObject.AddComponent<AudioSource>();
-            audio.volume = 1.0f; // 確保音量正常
+            audio.volume = 0.1f; // 確保音量正常
             audios.Add(audio);
         }
     }

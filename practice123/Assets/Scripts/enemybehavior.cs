@@ -1,69 +1,120 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class EnemyBehavior : MonoBehaviour
 {
-     private Animator animator;
+    private Animator animator;
     private float attackTimer;
     private bool isAttacking = false;
-    public float attackInterval = 2f;
-    
+    public float attackInterval = 2f; // 每 2 秒攻擊一次
+    public bool isFlipped = true;
+
     public float chaseRange = 10f;
-    public float moveSpeed = 2f;
+    public float moveSpeed = 2f;  // 追蹤速度
+    public float patrolSpeed = 2f; // 巡邏時速度
     
+    //邊界設置
     [SerializeField] private float leftCap;
     [SerializeField] private float rightCap;
-    private Vector3 patrolTarget;
-    public float detectRange = 3f;
+    private Vector3 patrolTarget; // 巡邏目標
+     public float detectRange = 3f; // 追蹤範圍
     
+
     private Transform player;
-    public GameObject hitboxPrefab;  // 🔹 Boss 攻擊時產生的 hitbox
-    private GameObject currentHitbox; // 🔹 用來存放當前 hitbox 的物件
-    
-    public float health = 300f;
-    private bool isDead = false;
+    private Vector3 startPosition; // 記錄初始位置
+    public GameObject hitbox; // 攻擊區域
+    public GameObject dropItemPrefab;
+    public Transform dropPosition;   // 掉落物生成位置，可選（默認為敵人位置）
+    public int dropAmount = 1; // 掉落物的數量，可調整
+
+    public float health = 100f; // 敵人血量
+    private bool isDead = false; // 是否已死亡
     public healthbar healthBar;
-    private bool facingRight = true;
-    private bool isChasing = false;
+    private bool facingRight = true; // 追蹤角色時的方向
+    private bool isChasing = false; // 是否在追蹤中
 
     void Start()
     {
         animator = GetComponent<Animator>();
-        attackTimer = attackInterval;
-        player = GameObject.FindGameObjectWithTag("Player")?.transform;
-        patrolTarget = new Vector3(rightCap, transform.position.y, transform.position.z);
+        attackTimer = attackInterval; // 初始化計時器
+        startPosition = transform.position; // 記錄敵人初始位置
+        player = GameObject.FindGameObjectWithTag("Player")?.transform; // 找到玩家
+        Debug.Log(player);  
+        if (hitbox != null)
+        {
+            hitbox.SetActive(false); // 開始時隱藏 hitbox
+        }
+        patrolTarget = new Vector3(rightCap, transform.position.y, transform.position.z); // 初始巡邏目標
     }
 
     void Update()
     {
-        if (isDead) return;
-        float playerDistance = Vector2.Distance(transform.position, player.position);
+        if (isDead) return; // 死亡後停止所有行為
+         float playerDistance = Vector2.Distance(transform.position, player.position);
+
+        // 確認玩家是否在 leftCap 和 rightCap 之間
         bool isPlayerInBounds = (player.position.x >= leftCap && player.position.x <= rightCap);
 
+        // 玩家必須在範圍內，且距離小於 detectRange，敵人才開始追蹤
         if (isPlayerInBounds && playerDistance <= detectRange)
+        {
             ChasePlayer();
+        }
         else
         {
             StopChasing();
             Patrol();
         }
 
-        attackTimer -= Time.deltaTime;
+        
+        attackTimer -= Time.deltaTime; // 減少計時器
         if (attackTimer <= 0)
         {
-            Attack();
-            attackTimer = attackInterval;
+            Attack(); // 執行攻擊
+            attackTimer = attackInterval; // 重置計時器
         }
     }
 
+    public void LookAtPlayer()
+    {
+    Vector3 flipped = transform.localScale;
+
+    if (transform.position.x > player.position.x && !isFlipped)
+    {
+        flipped.x *= -1f;  
+        transform.localScale = flipped;
+        isFlipped = true;
+        if (animator != null)
+        {
+            animator.SetBool("IsFlipped", true);
+        }
+    }
+    else if (transform.position.x < player.position.x && isFlipped)
+    {
+        flipped.x *= -1f;  
+        transform.localScale = flipped;
+        isFlipped = false;
+        if (animator != null)
+        {
+            animator.SetBool("IsFlipped", false);
+        }
+    }
+    }
+
+    // 追蹤玩家
     private void ChasePlayer()
     {
         if (player == null) return;
-        isChasing = true;
+
+        isChasing = true; // 進入追蹤狀態
         Vector2 targetPosition = new Vector2(player.position.x, transform.position.y);
         transform.position = Vector2.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
-        SetState(4);
+
+        SetState(4); // 設定為追蹤狀態
+
+        // 讓敵人朝向玩家
         if ((player.position.x > transform.position.x && !facingRight) || 
             (player.position.x < transform.position.x && facingRight))
         {
@@ -73,93 +124,186 @@ public class EnemyBehavior : MonoBehaviour
 
     private void Patrol()
     {
-        if (isChasing) return;
-        transform.position = Vector2.MoveTowards(transform.position, patrolTarget, moveSpeed * Time.deltaTime);
+        if (isChasing) return; // 如果剛從追蹤狀態回來，先不執行巡邏
+
+        transform.position = Vector2.MoveTowards(transform.position, patrolTarget, patrolSpeed * Time.deltaTime);
         SetState(4);
+
+        // 到達巡邏邊界時改變方向
         if (Vector2.Distance(transform.position, patrolTarget) < 0.1f)
         {
-            patrolTarget = (patrolTarget.x == leftCap) ? 
-            new Vector3(rightCap, transform.position.y, transform.position.z) : 
-            new Vector3(leftCap, transform.position.y, transform.position.z);
-            Flip();
+            if (patrolTarget.x == leftCap)
+            {
+                patrolTarget = new Vector3(rightCap, transform.position.y, transform.position.z);
+            }
+            else
+            {
+                patrolTarget = new Vector3(leftCap, transform.position.y, transform.position.z);
+            }
+
+            // 確保巡邏方向正確
+            if ((patrolTarget.x > transform.position.x && !facingRight) ||
+                (patrolTarget.x < transform.position.x && facingRight))
+            {
+                Flip();
+            }
         }
     }
 
+    // 當敵人離開 player 範圍時，回到巡邏狀態
     public void StopChasing()
     {
         isChasing = false;
+        // 設定新的巡邏方向為當前移動的方向
+        if (transform.position.x > patrolTarget.x && facingRight) Flip();
+        if (transform.position.x < patrolTarget.x && !facingRight) Flip();
     }
 
+    // 只翻轉敵人方向
     private void Flip()
     {
-        facingRight = !facingRight;
+        facingRight = !facingRight; // 反轉朝向狀態
         transform.localScale = new Vector3(-transform.localScale.x, transform.localScale.y, transform.localScale.z);
     }
 
+
+    // 攻擊邏輯
     void Attack()
     {
-        if (isDead) return;
+        if (isDead) return; // 如果已死亡，不執行攻擊
         isAttacking = true;
-        SetState(1); // 播放攻擊動畫
-        GameManager.instance.audioManager.Play(1, "SeShoot", false);
+        SetState(1); // 設置為攻擊狀態
+        GameManager.instance.audioManager.Play(1,"SeShoot", false);
+
+        // 啟用 hitbox
+        if (hitbox != null)
+        {
+            hitbox.SetActive(true);
+        }
+
+        // 延遲後重置攻擊狀態並禁用 hitbox
+        Invoke("ResetAttack", 0.1f);
     }
 
-    /// <summary>
-    /// 🔹 透過動畫事件啟動 hitbox
-    /// </summary>
-    public void EnableHitbox()
+    // 重置攻擊狀態
+    void ResetAttack()
     {
-        if (hitboxPrefab != null)
+        isAttacking = false;
+        SetState(0); // 設置為待機狀態
+
+        // 禁用 hitbox
+        if (hitbox != null)
         {
-            currentHitbox = Instantiate(hitboxPrefab, transform.position, Quaternion.identity);
-            currentHitbox.transform.SetParent(transform); // 讓 hitbox 跟隨 Boss
+            hitbox.SetActive(false);
         }
     }
 
-    /// <summary>
-    /// 🔹 透過動畫事件關閉 hitbox
-    /// </summary>
-    public void DisableHitbox()
-    {
-        if (currentHitbox != null)
-        {
-            Destroy(currentHitbox); // 刪除 hitbox
-            currentHitbox = null;
-        }
-    }
-
+    // 敵人受傷處理
     public void TakeDamage(int damage)
     {
-        if (isDead) return;
-        if (healthBar != null) healthBar.SetHealth(healthBar.currenthp - damage);
-        health -= damage;
-        if (health <= 0) Die();
-        else Hurt();
+        if (isDead) return; // 如果已死亡，不执行受伤处理
+
+        if(healthBar != null)
+        {
+            healthBar.SetHealth(healthBar.currenthp - damage);
+        }
+        health -= damage; // 减少血量
+        if (health <= 0)
+        {
+            Die(); // 如果血量小于等于 0，进入死亡状态
+        }
+        else
+        {
+            Hurt(); // 否则进入受伤状态
+        }
     }
 
+    // 受傷處理
     private void Hurt()
     {
-        animator.SetInteger("state", 2);
+        animator.SetInteger("state", 2);// 設置為受傷狀態
+        Debug.Log($"{gameObject.name} is hurt!");
+
+        // 在受傷後短暫恢復到待機狀態
         Invoke("ResetToIdle", 0.5f);
     }
 
+    // 死亡處理
     private void Die()
     {
         isDead = true;
-        SetState(3);
+        SetState(3); // 設置為死亡狀態
+        Debug.Log($"{gameObject.name} is dead!");
+
+        // 禁用敵人碰撞和行為
         GetComponent<Collider2D>().enabled = false;
         this.enabled = false;
+
+        //呼叫掉落物
         GetComponent<LootBag>().InstantiateLoot(transform.position);
+
+        // 延遲後刪除敵人
         Destroy(gameObject, 1f);
+        //SpawnDropItems();
     }
 
+    // 重置為待機狀態
     private void ResetToIdle()
     {
-        if (!isDead) SetState(0);
+        if (!isDead)
+        {
+            SetState(0); // 設置為待機狀態
+        }
     }
 
+    // 設置動畫狀態
     private void SetState(int state)
     {
-        if (animator != null) animator.SetInteger("state", state);
+        if (animator != null)
+        {
+            animator.SetInteger("state", state);
+        }
+        else
+        {
+            Debug.LogWarning("Animator is not assigned on the enemy!");
+        }
+    }
+
+    public bool IsAttacking()
+    {
+        return isAttacking;
+    }
+
+    public int GetState()
+    {
+        return animator != null ? animator.GetInteger("state") : -1;
+    }
+    public void EnableHitbox()
+    {
+        if (hitbox != null)
+        {
+            hitbox.SetActive(true); // 啟用 hitbox
+        }
+    }
+
+    public void DisableHitbox()
+    {
+        if (hitbox != null)
+        {
+            hitbox.SetActive(false); // 禁用 hitbox
+        }
+    }
+
+    public void DestroySelf()
+    {
+        // ✅ 確保死亡時產生掉落物品
+        LootBag lootBag = GetComponent<LootBag>();
+        if (lootBag != null)
+        {
+            lootBag.InstantiateLoot(transform.position);
+        }
+
+        // ✅ 刪除敵人
+        Destroy(gameObject);
     }
 }

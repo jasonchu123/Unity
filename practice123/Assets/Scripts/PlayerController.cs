@@ -27,13 +27,12 @@ public class PlayerController : MonoBehaviour
     private float trapDamageCooldown = 1f; // 地刺傷害間隔 1 秒
     private float lastTrapDamageTime = 0f; // 上次受到地刺傷害的時間
     private Vector2 movement;
-    private RunAudio walkSoundController; // 連接到音效物件的腳本
+
 
     private void Start() {
         rb = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
         coll = GetComponent<Collider2D>();
-        walkSoundController = FindObjectOfType<RunAudio>(); // 自動尋找音效控制腳本
     }
   
     // Update is called once per frame
@@ -46,10 +45,7 @@ public class PlayerController : MonoBehaviour
         AnimationState();
         anim.SetInteger("state", (int)state);//sets animation based on Enumerator state
         //Debug.Log((int)state);
-        if (walkSoundController != null) //音效
-        {
-            walkSoundController.SetWalking(movement.magnitude > 0);
-        }
+        
     }
 
     //Cherries
